@@ -8,7 +8,7 @@ jQuery(document).ready(function($) {
         const widget = $('#workcity-chat-widget');
         const toggle = widget.find('.chat-toggle');
         const window = widget.find('.chat-window');
-        const closeBtn = widget.find('.chat-close');
+        const closeBtn = widget.find('.chat-close');  
         const sendBtn = widget.find('.send-btn');
         const input = widget.find('.chat-input input');
         const messages = widget.find('.chat-messages');
@@ -43,33 +43,27 @@ jQuery(document).ready(function($) {
         function sendMessage() {
             const message = input.val().trim();
             if (message) {
-                addMessage(message, 'user');
+                const messageData = {
+                    text: message,
+                    sender: currentUser || 'WordPress User',
+                    timestamp: new Date().toISOString(),
+                    type: 'user'
+                };
                 
-                // Try to send to chat API
-                $.ajax({
-                    url: workcity_chat.api_url + '/messages',
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    data: JSON.stringify({
-                        message: message,
-                        sender: currentUser || 'wordpress_user',
-                        timestamp: new Date().toISOString()
-                    }),
-                    success: function(response) {
-                        addMessage('Message sent to chat system!', 'system');
-                    },
-                    error: function(xhr, status, error) {
-                        // Fallback: Show local response
-                        setTimeout(function() {
-                            addMessage('Message received: ' + message, 'bot');
-                        }, 1000);
-                        
-                        // Create WordPress chat session
-                        createChatSession('WordPress Chat: ' + new Date().toLocaleString(), message);
-                    }
-                });
+                addMessage(message, 'user');
+                saveChatMessage(messageData);
+                
+                // Auto-reply for demo
+                setTimeout(function() {
+                    const replyData = {
+                        text: 'Message received: ' + message,
+                        sender: 'WordPress Bot',
+                        timestamp: new Date().toISOString(),
+                        type: 'bot'
+                    };
+                    addMessage(replyData.text, 'bot', 'WordPress Bot');
+                    saveChatMessage(replyData);
+                }, 1000);
                 
                 input.val('');
             }
@@ -86,34 +80,21 @@ jQuery(document).ready(function($) {
     
     // Connect to chat backend
     function connectToChat() {
-        try {
-            // Try to connect to Socket.IO server
-            if (typeof io !== 'undefined') {
-                socket = io(workcity_chat.api_url.replace('/api', ''));
-                
-                socket.on('connect', function() {
-                    console.log('Connected to chat server');
-                    addMessage('Connected to chat', 'system');
-                });
-                
-                socket.on('new-message', function(data) {
-                    if (data.sender !== currentUser) {
-                        addMessage(data.message, 'bot');
-                    }
-                });
-                
-                socket.on('disconnect', function() {
-                    console.log('Disconnected from chat server');
-                });
-            } else {
-                // Fallback to polling if Socket.IO not available
-                addMessage('Chat connected (polling mode)', 'system');
-                startPolling();
+        addMessage('WordPress Chat Ready', 'system');
+        loadChatHistory();
+        
+        // Try to connect to Node.js server (optional)
+        $.ajax({
+            url: 'http://localhost:5000/api/health',
+            method: 'GET',
+            timeout: 2000,
+            success: function() {
+                addMessage('Connected to chat server', 'system');
+            },
+            error: function() {
+                addMessage('Chat server offline - using local mode', 'system');
             }
-        } catch (error) {
-            console.error('Failed to connect to chat:', error);
-            addMessage('Connection failed. Using offline mode.', 'error');
-        }
+        });
     }
     
     // Disconnect from chat
@@ -125,14 +106,16 @@ jQuery(document).ready(function($) {
     }
     
     // Add message to chat window
-    function addMessage(text, type) {
+    function addMessage(text, type, sender) {
         const messages = $('.chat-messages');
         const messageClass = type === 'user' ? 'message user' : 
                            type === 'system' ? 'message system' :
                            type === 'error' ? 'message error' : 'message bot';
         
         const timestamp = new Date().toLocaleTimeString();
+        const senderName = sender && type === 'bot' ? sender : '';
         const messageHtml = `<div class="${messageClass}">
+            ${senderName ? `<div class="message-sender">${escapeHtml(senderName)}</div>` : ''}
             <div class="message-text">${escapeHtml(text)}</div>
             <div class="message-time">${timestamp}</div>
         </div>`;
@@ -145,6 +128,25 @@ jQuery(document).ready(function($) {
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+    }
+    
+    // Save message to local storage
+    function saveChatMessage(messageData) {
+        let messages = JSON.parse(localStorage.getItem('wordpress_chat_messages') || '[]');
+        messages.push(messageData);
+        // Keep only last 50 messages
+        if (messages.length > 50) {
+            messages = messages.slice(-50);
+        }
+        localStorage.setItem('wordpress_chat_messages', JSON.stringify(messages));
+    }
+    
+    // Load chat history from local storage
+    function loadChatHistory() {
+        const messages = JSON.parse(localStorage.getItem('wordpress_chat_messages') || '[]');
+        messages.forEach(function(msg) {
+            addMessage(msg.text, msg.type, msg.sender);
+        });
     }
     
     // Polling fallback for when Socket.IO is not available
@@ -194,6 +196,8 @@ jQuery(document).ready(function($) {
         // Set current user if logged in
         if (typeof workcity_chat.current_user !== 'undefined') {
             currentUser = workcity_chat.current_user;
+        } else {
+            currentUser = 'WordPress User';
         }
         
         // Auto-create session for logged-in users

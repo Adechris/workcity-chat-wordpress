@@ -1,5 +1,16 @@
 <?php
- 
+/**
+ * Plugin Name: WorkCity Chat
+ * Plugin URI: https://github.com/yourusername/workcity-chat
+ * Description: WordPress integration for WorkCity Chat application with custom post types and REST API
+ * Version: 1.0.0
+ * Author: Your Name
+ * Author URI: https://yourwebsite.com
+ * License: GPL v2 or later
+ * License URI: https://www.gnu.org/licenses/gpl-2.0.html
+ * Text Domain: workcity-chat
+ * Domain Path: /languages
+ */
 
 // Prevent direct access
 if (!defined('ABSPATH')) {
@@ -56,7 +67,8 @@ class WorkCityChat {
         wp_localize_script('workcity-chat-widget', 'workcity_chat', array(
             'api_url' => 'http://localhost:5000/api',
             'nonce' => wp_create_nonce('wp_rest'),
-            'rest_url' => rest_url('workcity-chat/v1/')
+            'rest_url' => rest_url('workcity-chat/v1/'),
+            'current_user' => is_user_logged_in() ? wp_get_current_user()->display_name : 'Guest'
         ));
         
         // Add inline test script
